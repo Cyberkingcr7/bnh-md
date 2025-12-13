@@ -1,58 +1,38 @@
-# syntax = docker/dockerfile:1
+# Stage 1: Build the Application
+# We use node:20 as the base for building and installing dependencies.
+FROM node:20 AS build
 
-ARG NODE_VERSION=22.21.1
-FROM node:${NODE_VERSION}-slim AS base
+# Set the working directory inside the container
+WORKDIR /usr/src/app
 
-LABEL fly_launch_runtime="Node.js"
+# Copy package.json and package-lock.json first to leverage Docker caching.
+# If these files don't change, subsequent builds can skip 'npm install'.
+COPY package*.json ./
 
-WORKDIR /app
+# Install dependencies
+RUN npm install
 
-ENV NODE_ENV=production
-ARG YARN_VERSION=1.22.21
-RUN npm install -g yarn@${YARN_VERSION} --force
-
-
-# =========================
-# Build stage
-# =========================
-FROM base AS build
-
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y \
-    build-essential \
-    node-gyp \
-    pkg-config \
-    python-is-python3 \
-    git && \
-    rm -rf /var/lib/apt/lists/*
-
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
-
+# Copy the rest of the application source code
 COPY . .
-RUN yarn run build
 
+# Stage 2: Create the Final Production Image
+# We use node:20 as the runtime image with all the necessary tools.
+FROM node:20
 
-# =========================
-# Runtime stage
-# =========================
-FROM base
+# Set the working directory
+WORKDIR /usr/src/app
 
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y \
-    chromium \
-    chromium-sandbox \
-    ffmpeg && \
-    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives
+# Copy the node_modules and built application files from the 'build' stage
+COPY --from=build /usr/src/app/node_modules ./node_modules
+COPY --from=build /usr/src/app/package*.json ./
+COPY --from=build /usr/src/app .
 
-COPY --from=build /app /app
+# Expose the port your app runs on
+ENV PORT=8080
+EXPOSE $PORT
 
-# SQLite persistence
-RUN mkdir -p /data
-VOLUME /data
+# Run the application using the non-root user (recommended for security)
+USER node
 
-ENV DATABASE_URL="file:///data/sqlite.db" \
-    PUPPETEER_EXECUTABLE_PATH="/usr/bin/chromium"
-
-EXPOSE 3000
-CMD ["yarn", "run", "start"]
+# Define the command to start your application
+CMD [ "node", "index.js" ]
