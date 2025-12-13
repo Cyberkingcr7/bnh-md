@@ -47,6 +47,8 @@ tsc
 npm start
 ```
 
+If you want to host this bot , i'd suggest Railway or Fly.io.
+
 ## Creating a Command
 
 You can add new commands by creating files in the `src/cmd` directory. You can organize them into subfolders (e.g., `src/cmd/General`, `src/cmd/MyCategory`).
@@ -83,6 +85,7 @@ The `ctx` object provides helper methods and properties to interact with the mes
 - `ctx.reply(text)`: Reply to the message with text.
 - `ctx.sender.jid`: The JID (ID) of the sender.
 - `ctx.args`: Array of arguments passed to the command.
+
 
 
 
