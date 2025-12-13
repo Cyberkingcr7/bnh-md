@@ -43,27 +43,13 @@ interface UserDocument {
   phoneNumber?: string;
   role?: string;
   jid?: string;
-  wallet?: number;
-  gamble?: number
-  bank?: number;
   Xp?: number;
   bio?:string
   level?: number;
   ban?: boolean;
   downloadCount?: number;
   lastDownload?: number;
-  caughtPokemons?: CaughtPokemon[];
-  lastDaily?: number;
-  lastRob?: number;
-  claimedCards?: ClaimedCard[];
-  profilePicture?:string
-  black_market?: {
-    boost: BlackMarketBoost;
-  };
-  crime?: number; // Add the crime property here (timestamp of the last crime)
-  items?: { [key: string]: number }; // Add the items property here
-  work?: number; // Add the work property here (timestamp of the last work)
-  beg?: { cooldown: string }; // Add the beg cooldown property here
+  profilePicture?:string;
 }
 
 
@@ -556,4 +542,5 @@ async function generateRandomPassword(length = 8) {
       password += charset.charAt(Math.floor(Math.random() * charset.length));
   }
   return password;
+
 }
