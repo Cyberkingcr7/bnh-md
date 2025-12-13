@@ -1,0 +1,32 @@
+{
+"compilerOptions": {
+    "outDir": "lib",
+    "target": "es2017",
+    "types": ["node"],
+    "typeRoots": ["./types", "./node_modules/@types"],
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "node",
+    "rootDir": "src",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+
+},
+"include": [
+  "src/**/*.ts",
+  "src/**/*.js",
+  "*.json",
+  "m.d.ts",
+  "src/types"//new
+, ],
+  "exclude": [
+    "node_modules",                           // Exclude node_modules from compilation
+    "lib" ,  
+    "src/x.js"                                  // Exclude the output directory
+  ]
+}

@@ -1,0 +1,8 @@
+{
+    "watch": ["lib"],
+    "ext": "js,json",
+    "ignore": ["*.log", "node_modules/*"],
+    "delay": "500ms",
+    "exec": "node --max-old-space-size=4096 lib/bot.js"
+  }
+  
