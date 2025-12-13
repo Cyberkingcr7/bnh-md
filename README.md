@@ -1,4 +1,4 @@
-# Neko Bot
+# BNH Bot
 
 A WhatsApp bot built with Node.js, TypeScript, and Firebase.
 
@@ -43,7 +43,9 @@ A WhatsApp bot built with Node.js, TypeScript, and Firebase.
 To start the bot, run:
 
 ```bash
-npm run bot
+yarn install
+tsc
+npm start
 ```
 
 ## Creating a Command
@@ -82,3 +84,4 @@ The `ctx` object provides helper methods and properties to interact with the mes
 - `ctx.reply(text)`: Reply to the message with text.
 - `ctx.sender.jid`: The JID (ID) of the sender.
 - `ctx.args`: Array of arguments passed to the command.
+
