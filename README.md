@@ -12,8 +12,8 @@ A WhatsApp bot built with Node.js, TypeScript, and Firebase.
 1.  **Clone the repository:**
 
     ```bash
-    git clone <your-repo-url>
-    cd neko
+    git clone https://github.com/Cyberkingcr7/bnh-md
+    cd bnh-md
     ```
 
 2.  **Install dependencies:**
@@ -83,5 +83,6 @@ The `ctx` object provides helper methods and properties to interact with the mes
 - `ctx.reply(text)`: Reply to the message with text.
 - `ctx.sender.jid`: The JID (ID) of the sender.
 - `ctx.args`: Array of arguments passed to the command.
+
 
 
