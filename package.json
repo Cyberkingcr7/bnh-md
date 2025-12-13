@@ -103,7 +103,7 @@
     "winston": "^3.13.1"
   },
   "devDependencies": {
-     "typescript": "3.9.10",
+     "typescript": "5.5.3",
     "@types/archiver": "^6.0.3",
     "@types/bcrypt": "^5.0.2",
     "@types/canvasjs": "^1.9.11",
@@ -127,5 +127,6 @@
     "webpack-cli": "^5.1.4"
   }
 }
+
 
 
