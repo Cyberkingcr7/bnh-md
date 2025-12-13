@@ -1,0 +1,65 @@
+import { DatabaseHandler } from "../../db/DatabaseHandler";
+import { Ctx } from "../../lib/ctx";
+
+const dbHandler = new DatabaseHandler();
+
+module.exports = {
+  name: "bcgc",
+  category: "Owner",
+  code: async (ctx: Ctx) => {
+    const userId = ctx.sender?.jid!;
+    const userDocSnapshot = await dbHandler.getUser(userId);
+    const userRole = userDocSnapshot.data()?.role;
+
+    if (userRole !== 'superuser' && userRole !== 'poweruser') {
+      await ctx.reply("❌ You do not have permission to use this command.");
+      return;
+    }
+
+    const input = ctx.args.join(" ");
+    if (!input) {
+      await ctx.reply(`❗ Please provide a message to broadcast.\nExample: !bcgc Hello all!`);
+      return;
+    }
+
+    try {
+      const groupData = await ctx.client.groupFetchAllParticipating();
+      const groupIds = Object.values(groupData).map(g => g.id);
+      const waitMsg = await ctx.reply(
+        `🔄 Broadcasting to ${groupIds.length} groups...\nEstimated time: ${(groupIds.length * 0.5 / 60).toFixed(2)} minutes.`
+      );
+
+      const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+      const failedGroupIds: string[] = [];
+
+      for (const groupId of groupIds) {
+        await delay(500);
+
+        try {
+          const metadata = await ctx.client.groupMetadata(groupId);
+          const mentions = metadata.participants.map(p => p.id);
+
+          await ctx.client.sendMessage(
+            groupId,
+            {
+              text: `📢 *Broadcast Message:*\n\n${input}`,
+              mentions
+            }
+          );
+        } catch (error) {
+          console.error(`Error sending to group ${groupId}:`, error);
+          failedGroupIds.push(groupId);
+        }
+      }
+
+      const successCount = groupIds.length - failedGroupIds.length;
+      await ctx.editMessage(
+        waitMsg?.key!,
+        `✅ Broadcast complete.\n🟢 Success: ${successCount} groups\n🔴 Failed: ${failedGroupIds.length}`
+      );
+    } catch (error: any) {
+      console.error(`Unexpected error:`, error);
+      await ctx.reply(`⚠️ Error: ${error.message}`);
+    }
+  },
+};

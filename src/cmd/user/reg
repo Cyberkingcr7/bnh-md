@@ -1,0 +1,172 @@
+import { db } from "../../db/DatabaseHandler";
+import { Ctx } from "../../lib/ctx";
+import bcrypt from 'bcrypt'; 
+import { proto } from '@whiskeysockets/baileys';
+
+
+// You can optionally store "active askers" to prevent multiple asks at once
+const activeAskers = new Map<string, (text: string) => void>();
+
+export const askQuestion = (
+  ctx: Ctx,
+  prompt: string,
+  timeoutMs = 60000
+): Promise<string> => {
+  const userId = ctx.sender.jid;
+  const chatId = ctx.id;
+
+  // Prevent overlapping asks from same user
+  if (activeAskers.has(userId)) {
+    return Promise.reject(new Error("You already have an active prompt."));
+  }
+
+  return new Promise(async (resolve, reject) => {
+    const sock = ctx.client;
+
+    // Send prompt
+    await ctx.reply(prompt);
+
+    // Handler
+    const handler = (m: { messages: proto.IWebMessageInfo[] }) => {
+      for (const msg of m.messages) {
+        const isCommand =
+          msg.message?.conversation?.startsWith("!") ||
+          msg.message?.extendedTextMessage?.text?.startsWith("!");
+
+        const sender = msg.key.participant || msg.key.remoteJid;
+        const body =
+          msg.message?.conversation ||
+          msg.message?.extendedTextMessage?.text;
+
+        if (sender === userId && !isCommand && body) {
+          cleanup();
+          resolve(body);
+          break;
+        }
+      }
+    };
+
+    const cleanup = () => {
+      sock.ev.off("messages.upsert", handler);
+      clearTimeout(timeout);
+      activeAskers.delete(userId);
+    };
+
+    // Register the listener
+    sock.ev.on("messages.upsert", handler);
+    activeAskers.set(userId, resolve);
+
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("No response received in time."));
+    }, timeoutMs);
+  });
+};
+
+
+module.exports = {
+  name: "register",
+    aliases: ["reg"],
+    category: "User",
+    code: async (ctx:Ctx) => {
+        const userId = ctx?.message.key?.remoteJid;
+        if (!userId) {
+            await ctx.reply('Error: Unable to fetch user ID.');
+            return;
+        }
+function isPrivateChat(ctx: Ctx): boolean {
+    return !ctx.isGroup;
+}
+        if (!(await isPrivateChat(ctx))) {
+            await ctx.reply('This command can only be used in private messages.');
+            return;
+        }
+
+        try {
+            // Check if the user is already registered
+            const userDoc = await db.collection('users').doc(userId).get();
+            if (userDoc.exists) {
+                await ctx.reply('You are already registered. If you forgot your details, please reset your password on https://space2bnhz.onrender.com/.');
+                return;
+            }
+
+            // Collect user information
+            const firstName = await askQuestion(ctx, 'Please enter your first name:');
+            if (!firstName) {
+                await ctx.reply('No first name entered. Registration cancelled.');
+                return;
+            }
+
+            const secondName = await askQuestion(ctx, 'Please enter your second name:');
+            if (!secondName) {
+                await ctx.reply('No second name entered. Registration cancelled.');
+                return;
+            }
+
+            let password;
+            while (true) {
+                password = await askQuestion(ctx, 'Please enter a unique password (at least 6 characters, 1 capital letter):');
+                if (!password) {
+                    await ctx.reply('No password entered. Registration cancelled.');
+                    return;
+                }
+
+                // Validate password
+                if (password.length < 6) {
+                    await ctx.reply('Password must be at least 6 characters long.');
+                    continue;
+                }
+
+                if (!/[A-Z]/.test(password)) {
+                    await ctx.reply('Password must contain at least one capital letter.');
+                    continue;
+                }
+
+                break;
+            }
+
+            // Collect and validate age
+            const ageResponse = await askQuestion(ctx, 'Please enter your age:');
+            const age = parseInt(ageResponse, 10);
+            if (isNaN(age) || age <= 0) {
+                await ctx.reply('Invalid age entered. Registration cancelled.');
+                return;
+            }
+
+            // Hash the password
+            const saltRounds = 10;
+            let hashedPassword;
+            try {
+                hashedPassword = await bcrypt.hash(password, saltRounds);
+            } catch (error) {
+                console.error('Error hashing the password:', error);
+                await ctx.reply('There was an issue hashing your password. Please try again.');
+                return;
+            }
+
+            // Save user data to the database
+            try {
+              // Example schema update when registering a user
+await db.collection('users').doc(userId).set({
+    firstName,
+    secondName,
+    password: hashedPassword,
+    age,
+    loggedIn: true, // User is logged in upon registration
+    baka:password
+});
+
+                await ctx.reply(
+                    'Your registration is complete! Your profile has been created.\n You can always check your profile here *https://space2bnhz.onrender.com*\n\n Remember do not share your password with anyone!!'
+                );
+            } catch (dbError) {
+                console.error('Error saving to the database:', dbError);
+                await ctx.reply('There was an issue saving your data. Please try again later.');
+            }
+        } catch (error) {
+            // General error handler
+            console.error('Error during registration:', error);
+            await ctx.reply('An error occurred during registration. Please try again later.');
+        }
+    },
+};

@@ -1,0 +1,149 @@
+import { db } from "../../db/DatabaseHandler";
+import { Ctx } from "../../lib/ctx";
+import bcrypt from "bcrypt";
+
+module.exports = {
+  name: "register",
+  aliases: ["reg"],
+  category: "User",
+  code: async (ctx: Ctx) => {
+    const isGroup = ctx.isGroup;
+    const userId = isGroup
+      ? ctx?.message.key?.participant
+      : ctx?.message.key?.remoteJid;
+
+    if (!userId) {
+      await ctx.reply("\u2743 Error: Unable to fetch user ID."); // ❌
+      return;
+    }
+
+    function isPrivateChat(ctx: Ctx): boolean {
+      return !ctx.isGroup;
+    }
+
+    if (!isPrivateChat(ctx)) {
+      await ctx.reply("\u2743 This command can only be used in private messages."); // ❌
+      return;
+    }
+
+    try {
+      const body =
+        ctx.message.message?.conversation ||
+        ctx.message.message?.extendedTextMessage?.text ||
+        "";
+
+      if (!body || body.trim() === "!reg") {
+        await ctx.reply(
+          "\uD83D\uDCDE **Old users**: Use `!reg 27672633675.Password` to update your account.\n" +
+          "\uD83D\uDCDE **New users**: Use `!reg FirstName.SecondName.Age.Password.Number` to register."
+        );
+        return;
+      }
+
+      const args = body.split(" ");
+      if (args.length < 2) {
+        await ctx.reply(
+          "\u2743 Invalid usage. Type `!reg` to see instructions."
+        );
+        return;
+      }
+
+      const input = args[1].trim();
+
+      // --- Old user format: number.password ---
+      if (/^\d+\..+/.test(input)) {
+        const [number, password] = input.split(".");
+        if (!/^\d{11,15}$/.test(number)) {
+          await ctx.reply("\u2743 Invalid number. Enter it like 27683655563.Password");
+          return;
+        }
+
+        const oldJid = number + "@s.whatsapp.net";
+        const oldUserRef = db.collection("users").doc(oldJid);
+        const oldUserDoc = await oldUserRef.get();
+
+        if (!oldUserDoc.exists) {
+          await ctx.reply("\u2743 No user found with that number.");
+          return;
+        }
+
+        const oldData = oldUserDoc.data()!;
+        const match = await bcrypt.compare(password, oldData.password);
+        if (!match) {
+          await ctx.reply("\u2743 Incorrect password. Try again.");
+          return;
+        }
+
+        const newUserRef = db.collection("users").doc(userId);
+        await newUserRef.set({
+          ...oldData,
+          lid: userId,
+          preUser: oldJid, // store old number as full JID
+          loggedIn: true,
+        });
+
+        await oldUserRef.delete();
+
+        await ctx.reply("\u2705 Your registration has been updated with the new JID."); // ✅
+        return;
+      }
+
+      // --- New user format: FirstName.SecondName.Age.Password.Number ---
+      const details = input.split(".");
+      if (details.length < 5) {
+        await ctx.reply("\u2743 Invalid format. Use: FirstName.SecondName.Age.Password.Number");
+        return;
+      }
+
+      const firstName = details[0];
+      const secondName = details[1];
+      const age = parseInt(details[2], 10);
+      const rawPassword = details[3];
+      const number = details.slice(4).join(""); 
+      const jidNumber = number + "@s.whatsapp.net"; // full JID
+
+      if (!firstName || !secondName || isNaN(age) || age <= 0) {
+        await ctx.reply("\u2743 Invalid details. Please follow the format correctly.");
+        return;
+      }
+
+      if (rawPassword.length < 6 || !/[A-Z]/.test(rawPassword)) {
+        await ctx.reply("\u2743 Password must be at least 6 characters long and contain a capital letter.");
+        return;
+      }
+
+      if (!/^\d{11,15}$/.test(number)) {
+        await ctx.reply("\u2743 Invalid number. Enter it like 27683655563.");
+        return;
+      }
+
+      const hashedPassword = await bcrypt.hash(rawPassword, 10);
+
+      const newUserRef = db.collection("users").doc(userId);
+      await newUserRef.set({
+        firstName,
+        secondName,
+        password: hashedPassword,
+        age,
+        number: jidNumber, // save number as full JID
+        preUser: jidNumber, // also store as preUser
+        lid: userId,
+        loggedIn: true,
+      });
+
+      await ctx.reply(
+        "\u2705 Registration complete!\n\n" +
+        "\uD83D\uDC64 Name: *" + firstName + " " + secondName + "*\n" +
+        "\uD83C\uDF82 Age: *" + age + "*\n" +
+        "\uD83D\uDCCC Number (JID): *" + jidNumber + "*\n" +
+        "\uD83D\uDCCC Keep your password safe!\n" +
+        "\uD83D\uDD17 Check your profile: https://space2bnhz.tail9ef80b.ts.net/"
+      );
+
+    } catch (error) {
+      console.error("Error in register command:", error);
+      await ctx.reply("\u26A0\uFE0F An error occurred during registration. Please try again later."); // ⚠️
+    }
+  },
+};
+
