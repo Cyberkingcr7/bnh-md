@@ -1,58 +1,58 @@
 # syntax = docker/dockerfile:1
 
-# Adjust NODE_VERSION as desired
 ARG NODE_VERSION=22.21.1
 FROM node:${NODE_VERSION}-slim AS base
 
 LABEL fly_launch_runtime="Node.js"
 
-# Node.js app lives here
 WORKDIR /app
 
-# Set production environment
-ENV NODE_ENV="production"
+ENV NODE_ENV=production
 ARG YARN_VERSION=1.22.21
-RUN npm install -g yarn@$YARN_VERSION --force
+RUN npm install -g yarn@${YARN_VERSION} --force
 
 
-# Throw-away build stage to reduce size of final image
+# =========================
+# Build stage
+# =========================
 FROM base AS build
 
-# Install packages needed to build node modules
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
+    apt-get install --no-install-recommends -y \
+    build-essential \
+    node-gyp \
+    pkg-config \
+    python-is-python3 \
+    git && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install node modules
 COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile --production=false
+RUN yarn install --frozen-lockfile
 
-# Copy application code
 COPY . .
-
-# Build application
 RUN yarn run build
 
-# Remove development dependencies
-RUN yarn install --production=true
 
-
-# Final stage for app image
+# =========================
+# Runtime stage
+# =========================
 FROM base
 
-# Install packages needed for deployment
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y chromium chromium-sandbox ffmpeg && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+    apt-get install --no-install-recommends -y \
+    chromium \
+    chromium-sandbox \
+    ffmpeg && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives
 
-# Copy built application
 COPY --from=build /app /app
 
-# Setup sqlite3 on a separate volume
+# SQLite persistence
 RUN mkdir -p /data
 VOLUME /data
 
-# Start the server by default, this can be overwritten at runtime
-EXPOSE 3000
 ENV DATABASE_URL="file:///data/sqlite.db" \
     PUPPETEER_EXECUTABLE_PATH="/usr/bin/chromium"
-CMD [ "yarn", "run", "start" ]
+
+EXPOSE 3000
+CMD ["yarn", "run", "start"]
