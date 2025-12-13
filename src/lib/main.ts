@@ -4,29 +4,30 @@ import makeWASocket, {
   DisconnectReason,
   proto,
   WASocket,
-  MessageUpsertType,
-  extractMessageContent,
-  downloadMediaMessage
+  ConnectionState,
 } from 'baileys';
 import Boom from '@hapi/boom';
-import { ConnectionState } from 'baileys';
 import pino from 'pino';
 import { CommandHandler } from './cmdhandler';
 import { tryProcessWcgPassive } from '../cmd/games/wcg';
 import { createCtx, Ctx } from './ctx';
 import * as path from 'path';
-import { db, dbHandler } from '../db/DatabaseHandler';
+import { dbHandler } from '../db/DatabaseHandler';
 import { exec } from 'child_process';
 import axios from 'axios';
 import fs from 'fs';
 import { readFile, unlink, writeFile, rm } from 'fs/promises';
 import { checkAdmin } from './utils';
 import qrcodeTerminal from 'qrcode-terminal';
+import qrcode from 'qrcode';
+import express from 'express';
 import util from 'util';
 
 let sockInstance: ReturnType<typeof makeWASocket> | null = null;
-
 const logger = pino({ level: 'silent' });
+const app = express();
+const PORT = process.env.PORT || 8080;
+let latestQR: string | null = null;
 
 // Export socket instance
 export function getSock() {
@@ -49,7 +50,7 @@ async function safeAuthState(authPath: string) {
   return await useMultiFileAuthState(authPath);
 }
 
-// Create / ensure directory
+// Ensure download directory
 async function ensureSrcDirectory() {
   const downloadDir = path.join(process.cwd(), 'src');
   try {
@@ -63,10 +64,8 @@ async function ensureSrcDirectory() {
 
 export async function bot() {
   const { state, saveCreds } = await safeAuthState('state');
-
   const sock = makeWASocket({ logger, auth: state });
   sockInstance = sock;
-
   sock.ev.on('creds.update', saveCreds);
 
   // Command handler
@@ -80,7 +79,6 @@ export async function bot() {
   const BOT_JID = '93745225175@s.whatsapp.net';
   const linkRegex = /(https?:\/\/[^\s]+|chat\.whatsapp\.com\/[A-Za-z0-9]+|t\.me\/[^\s]+)/i;
 
-  // Check if bot is admin
   async function isBotGroupAdmin(sock: WASocket, groupJid: string): Promise<boolean> {
     try {
       const metadata = await sock.groupMetadata(groupJid);
@@ -99,30 +97,17 @@ export async function bot() {
 
     const msg = messages[0];
     const keyParticipant = (msg.key as any).participantAlt ?? msg.key.participant;
-    
-  //     console.log("=== NEW MESSAGE ===");
-  // console.log("Full message object:", msg);
-  // console.log("Message type:", type);
-  // console.log("Message keys:", Object.keys(msg));
-  // console.log("Message content:", msg.message);
-  // console.log("Sender JID:", msg.key?.fromMe ? sock.user?.id : msg.key?.remoteJid);
-  // console.log("Is group message:", msg.key?.remoteJid?.endsWith("@g.us"));
-  // console.log("===================");
 
     if (!msg.message || msg.key.fromMe) return;
-
-    // Fix Firestore invalid path error:
-    // Ensure msg.key.remoteJid is defined and non-empty
     const chatId = msg.key.remoteJid ?? keyParticipant ?? '';
     if (!chatId) return;
 
-    // Create context with error handling
     let ctx: Ctx;
     try {
       ctx = await createCtx(sock, msg);
     } catch (error) {
       console.error('Error creating context:', error);
-      return; // Skip processing if context creation fails
+      return;
     }
 
     const text =
@@ -134,67 +119,42 @@ export async function bot() {
 
     const groupId = msg.key.remoteJid ?? chatId;
 
-let senderJid: string | undefined;
+    let senderJid: string | undefined;
+    if (msg.key.remoteJid?.endsWith("@g.us")) senderJid = msg.key.participant || undefined;
+    else {
+      if (msg.key.remoteJid?.endsWith("@lid")) senderJid = msg.key.remoteJid;
+      else if (msg.key.remoteJidAlt?.endsWith("@lid")) senderJid = msg.key.remoteJidAlt;
+    }
+    if (!senderJid || !senderJid.endsWith("@lid")) return;
 
-// ignore messages from yourself
-if (msg.key.fromMe) return;
+    ctx.sender.jid = senderJid;
+    ctx.sender.participantAlt = senderJid;
+    const senderName = msg.pushName || senderJid;
+    console.log(`[${ctx.sender.jid}] says: ${text}`);
 
-// GROUP MESSAGE → participant is usually @lid
-if (msg.key.remoteJid?.endsWith("@g.us")) {
-    senderJid = msg.key.participant || undefined;
-}
-
-// DM MESSAGE → pick whichever ends with @lid
-else {
-    if (msg.key.remoteJid?.endsWith("@lid")) senderJid = msg.key.remoteJid;
-    else if (msg.key.remoteJidAlt?.endsWith("@lid")) senderJid = msg.key.remoteJidAlt;
-}
-
-// If no LID available, ignore (cannot identify sender)
-if (!senderJid || !senderJid.endsWith("@lid")) return;
-
-// Assign to context (use only LID IDs everywhere)
-ctx.sender.jid = senderJid;
-ctx.sender.participantAlt = senderJid;
-
-const senderName = msg.pushName || senderJid;
-
-console.log(`[${ctx.sender.jid}] says: ${text}`);
-
-
-    // console.log(util.inspect(msg, { depth: null, colors: true }));
-    // Handle ! commands
     if (text.toLowerCase().startsWith('!') && cmdHandler) {
       await cmdHandler.handle(ctx);
       return;
     }
 
-    // Passive Word Chain capture (no prefix)
     if (await tryProcessWcgPassive(ctx, text)) return;
-
     if (text === '!') {
       await ctx.reply('wagwan');
       return;
     }
 
-    // > commands
     if (text.startsWith('>')) {
       try {
         const senderId = keyParticipant || msg.key.remoteJid;
-
-       // const senderId = ctx.sender?.jid;
         if (!senderId) {
           await ctx.reply('Failed to retrieve your ID.');
           return;
         }
-
-        // Firestore user check
         const userDoc = await dbHandler.getUser(senderId);
         if (!userDoc.exists) {
           await ctx.reply('You are not registered in the system.');
           return;
         }
-
         const userRole = userDoc.data()?.role ?? '';
         if (!['superuser', 'poweruser'].includes(userRole)) {
           await ctx.reply('You do not have permission to use this command.');
@@ -241,7 +201,7 @@ console.log(`[${ctx.sender.jid}] says: ${text}`);
       }
     }
 
-    // Auto join group via invite
+    // Auto-join group
     const TARGET_GROUP = '120363386725048071@g.us';
     const MIN_MEMBERS = 30;
     const inviteLinkRegex = /https:\/\/chat\.whatsapp\.com\/([A-Za-z0-9]+)/;
@@ -251,8 +211,7 @@ console.log(`[${ctx.sender.jid}] says: ${text}`);
         const inviteCode = match[1];
         try {
           const joinedGroupJid = await sock.groupAcceptInvite(inviteCode);
-          if (!joinedGroupJid) return; 
-
+          if (!joinedGroupJid) return;
           console.log(`Joined group ${joinedGroupJid}`);
           await sock.sendMessage(groupId, { text: `Successfully joined group ${joinedGroupJid}` });
           const metadata = await sock.groupMetadata(joinedGroupJid);
@@ -272,12 +231,10 @@ console.log(`[${ctx.sender.jid}] says: ${text}`);
     if (groupId.endsWith('@g.us') && linkRegex.test(text)) {
       const antilinkEnabled = await dbHandler.getAntilink(groupId);
       if (!antilinkEnabled) return;
-
       const isSenderAdmin = await checkAdmin(await ctx, senderJid);
       const isBotAdmin = await isBotGroupAdmin(sock, groupId);
       if (!isBotAdmin) return;
       if (isSenderAdmin) return;
-
       try {
         await sock.groupParticipantsUpdate(groupId, [senderJid], 'remove');
         await sock.sendMessage(groupId, { text: `${senderName} was removed for sending a link.` });
@@ -287,10 +244,14 @@ console.log(`[${ctx.sender.jid}] says: ${text}`);
     }
   });
 
-  // Connection handling
+  // Connection handling & QR
   sock.ev.on('connection.update', (update: Partial<ConnectionState>) => {
     const { connection, lastDisconnect, qr } = update;
-    if (qr) qrcodeTerminal.generate(qr, { small: true });
+    if (qr) {
+      latestQR = qr;
+      qrcodeTerminal.generate(qr, { small: true });
+      console.log('QR code available at /qr');
+    }
 
     if (connection === 'close') {
       const shouldReconnect =
@@ -303,36 +264,50 @@ console.log(`[${ctx.sender.jid}] says: ${text}`);
     }
   });
 
+  // QR endpoint
+  app.get('/qr', async (req, res) => {
+    if (!latestQR) return res.status(404).send('No QR code available yet');
+    try {
+      const dataUrl = await qrcode.toDataURL(latestQR);
+      const img = Buffer.from(dataUrl.split(',')[1], 'base64');
+      res.writeHead(200, {
+        'Content-Type': 'image/png',
+        'Content-Length': img.length,
+      });
+      res.end(img);
+    } catch (err) {
+      res.status(500).send('Failed to generate QR');
+    }
+  });
+
+  app.listen(PORT, () => console.log(`QR server running at http://localhost:${PORT}/qr`));
+
   return sock;
-}
+};
 
 // GIF to MP4 helper
 export const gifToMp4 = async (gif: Buffer, downloadDir: string): Promise<Buffer> => {
   const filename = `${downloadDir}/${Math.random().toString(36).substring(2, 10)}`;
   await writeFile(`${filename}.gif`, gif);
-
   await new Promise<void>((resolve, reject) => {
     exec(
       `ffmpeg -f gif -i ${filename}.gif -movflags faststart -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" ${filename}.mp4`,
       (error) => (error ? reject(error) : resolve())
     );
   });
-
   const buffer = await readFile(`${filename}.mp4`);
   await Promise.all([unlink(`${filename}.gif`), unlink(`${filename}.mp4`)]);
   return buffer;
 };
 
-// Reaction handler
+// Reaction helper
 export const performReactionAction = async (reaction: string, message: string, ctx: Ctx) => {
   try {
     const waifuApiUrl = `https://api.waifu.pics/sfw/${reaction}`;
     const { data } = await axios.get(waifuApiUrl);
     if (!data.url) throw new Error('No valid media URL');
-
     const response = await axios.get(data.url, { responseType: 'arraybuffer' });
     const mp4Buffer = await gifToMp4(Buffer.from(response.data), 'downloads');
-
     await ctx.reply({ video: mp4Buffer, caption: message, gifPlayback: true, mimetype: 'video/mp4' });
   } catch (err: any) {
     console.error('Reaction error:', err.message);
@@ -368,4 +343,3 @@ export const reactions = {
   poke: ['Poked'],
   dance: ['is Dancing with', 'is Dancing by'],
 };
-
