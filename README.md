@@ -43,7 +43,6 @@ A WhatsApp bot built with Node.js, TypeScript, and Firebase.
 To start the bot, run:
 
 ```bash
-yarn install
 tsc
 npm start
 ```
@@ -84,4 +83,5 @@ The `ctx` object provides helper methods and properties to interact with the mes
 - `ctx.reply(text)`: Reply to the message with text.
 - `ctx.sender.jid`: The JID (ID) of the sender.
 - `ctx.args`: Array of arguments passed to the command.
+
 
