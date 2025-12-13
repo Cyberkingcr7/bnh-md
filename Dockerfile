@@ -1,8 +1,6 @@
-# Use Node.js LTS version
 FROM node:18-bullseye
 
-# Install dependencies for canvas and other native modules
-# This is crucial for packages like 'canvas', 'puppeteer', 'fluent-ffmpeg'
+# Native deps (canvas, ffmpeg, puppeteer)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libcairo2-dev \
@@ -26,26 +24,23 @@ RUN apt-get update && apt-get install -y \
     dumb-init \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files first for better caching
-COPY package.json yarn.lock ./
+# Copy npm files only
+COPY package*.json ./
 
-# Install dependencies
-# Using --frozen-lockfile to ensure reproducible builds
-RUN yarn install --frozen-lockfile
+# IMPORTANT: legacy peer deps for your ecosystem
+RUN npm install --legacy-peer-deps
 
-# Copy the rest of the application code
+# Copy source
 COPY . .
 
-# Build the TypeScript code
+# Compile TS → lib/
 RUN npm run t
 
-# Set environment variables
 ENV NODE_ENV=production
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Start the bot using dumb-init to handle signals correctly
+# Run compiled JS
 CMD ["dumb-init", "node", "lib/main.js"]
