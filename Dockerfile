@@ -1,4 +1,4 @@
-FROM node:18-bullseye
+FROM node:20-bullseye
 
 # Native deps (canvas, ffmpeg, puppeteer)
 RUN apt-get update && apt-get install -y \
@@ -26,10 +26,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy npm files only
+# Copy npm manifests
 COPY package*.json ./
 
-# IMPORTANT: legacy peer deps for your ecosystem
+# Match your local behavior
 RUN npm install --legacy-peer-deps
 
 # Copy source
@@ -42,5 +42,4 @@ ENV NODE_ENV=production
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Run compiled JS
 CMD ["dumb-init", "node", "lib/main.js"]
