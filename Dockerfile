@@ -1,31 +1,39 @@
+# Stage 1: Build TypeScript
 FROM node:20 AS build
 
 WORKDIR /usr/src/app
 
-# Copy package files
+# Copy package.json and package-lock.json first for caching
 COPY package*.json ./
 
-# Install all dependencies including devDependencies
+# Install all dependencies (including dev for TS compilation)
 RUN npm install
 
-# Copy the rest of the code
+# Copy all source code
 COPY . .
 
 # Compile TypeScript
-RUN npx tsc --skipLibCheck
+RUN npm run t   # This runs "tsc" from your package.json
 
-# Stage 2: Production
+# Stage 2: Production image
 FROM node:20
 
 WORKDIR /usr/src/app
 
-COPY --from=build /usr/src/app/package*.json ./
-COPY --from=build /usr/src/app/node_modules ./node_modules
-COPY --from=build /usr/src/app/dist ./dist
+# Copy only production dependencies
+COPY package*.json ./
+RUN npm install --omit=dev
 
+# Copy compiled files from build stage
+COPY --from=build /usr/src/app/lib ./lib
+COPY --from=build /usr/src/app/ecosystem.config.js ./
+
+# Expose your app port (if needed)
 ENV PORT=8080
 EXPOSE $PORT
 
+# Use non-root user
 USER node
 
-CMD ["node", "dist/main.js"]
+# Start your bot with PM2
+CMD ["pm2-runtime", "ecosystem.config.js"]
