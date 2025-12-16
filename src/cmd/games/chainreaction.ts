@@ -2,6 +2,7 @@ import { Ctx } from "../../lib/ctx";
 import Jimp from "jimp";
 
 type Cell = { owner: string | null; count: number };
+
 type Player = { jid: string; name: string; color: string };
 
 type GameState = {
@@ -51,7 +52,7 @@ const renderBoard = async (game: GameState): Promise<Buffer> => {
   const w = game.width * cellSize + pad * 2;
   const h = game.height * cellSize + pad * 2;
 
-  const img = new Jimp(w, h, "#111820" as any);
+  const img = new Jimp(w, h, 0x111820ff);
   const font = await Jimp.loadFont(Jimp.FONT_SANS_16_WHITE);
 
   for (let y = 0; y < game.height; y++) {
