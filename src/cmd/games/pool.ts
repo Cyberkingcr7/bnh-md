@@ -1,5 +1,5 @@
 import { Ctx } from "../../lib/ctx";
-import Jimp from "jimp";
+import Jimp = require("jimp");
 
 type BallType = "cue" | "solid" | "stripe" | "eight";
 
