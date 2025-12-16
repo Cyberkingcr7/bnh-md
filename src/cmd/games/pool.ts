@@ -30,7 +30,7 @@ type GameState = {
   balls: Ball[];
 };
 
-const TABLE_W = 900;
+const TABLE_W = 600;
 const TABLE_H = 450;
 const BALL_R = 12;
 const POCKET_R = 26;
@@ -132,14 +132,14 @@ const drawCircle = (img: Jimp, cx: number, cy: number, r: number, color: string)
 
 const renderTable = async (game: GameState, caption?: string): Promise<Buffer> => {
   const pad = 60;
-  const img = new Jimp(TABLE_W + pad * 2, TABLE_H + pad * 2, "#0b3d2b" as any);
+  const img = new Jimp(TABLE_W + pad * 2, TABLE_H + pad * 2, 0x0b3d2bff);
   const font = await Jimp.loadFont(Jimp.FONT_SANS_16_WHITE);
   const tableX = pad, tableY = pad;
 
-  const felt = new Jimp(TABLE_W, TABLE_H, "#156d47" as any);
+  const felt = new Jimp(TABLE_W, TABLE_H, 0x156d47ff);
   img.composite(felt, tableX, tableY);
 
-  const cushion = new Jimp(TABLE_W + 8, TABLE_H + 8, "#0a2d20" as any);
+  const cushion = new Jimp(TABLE_W + 8, TABLE_H + 8, 0x0a2d20ff);
   img.composite(cushion, tableX - 4, tableY - 4);
 
   // Safe fillRect to avoid out-of-range errors
