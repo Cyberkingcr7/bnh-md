@@ -1,5 +1,5 @@
 import { Ctx } from "../../lib/ctx";
-import Jimp from "jimp";
+import Jimp = require("jimp");
 
 type Cell = { owner: string | null; count: number };
 
