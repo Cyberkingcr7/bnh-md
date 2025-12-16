@@ -1,5 +1,5 @@
 # Use Node.js LTS version
-FROM node:18-bullseye
+FROM node:20-bullseye
 
 # Install dependencies for canvas and other native modules
 # This is crucial for packages like 'canvas', 'puppeteer', 'fluent-ffmpeg'
@@ -34,7 +34,7 @@ COPY package.json yarn.lock ./
 
 # Install dependencies
 # Using --frozen-lockfile to ensure reproducible builds
-RUN yarn install --frozen-lockfile
+RUN yarn install
 
 # Copy the rest of the application code
 COPY . .
