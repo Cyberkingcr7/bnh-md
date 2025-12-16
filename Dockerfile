@@ -1,8 +1,13 @@
-# Use Node.js LTS version
-FROM node:20-bullseye
+# syntax=docker/dockerfile:1
 
-# Install dependencies for canvas and other native modules
-# This is crucial for packages like 'canvas', 'puppeteer', 'fluent-ffmpeg'
+########## BASE IMAGE ##########
+FROM node:20-bullseye AS base
+
+ENV NODE_ENV=production
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+# Install OS deps ONCE
 RUN apt-get update && apt-get install -y \
     build-essential \
     libcairo2-dev \
@@ -26,26 +31,35 @@ RUN apt-get update && apt-get install -y \
     dumb-init \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files first for better caching
+########## DEPENDENCIES LAYER ##########
+FROM base AS deps
+
+# Copy ONLY dependency files
 COPY package.json yarn.lock ./
 
-# Install dependencies
-# Using --frozen-lockfile to ensure reproducible builds
-RUN yarn install
+# Install deps (cached unless lockfile changes)
+RUN yarn install --frozen-lockfile --production=false
 
-# Copy the rest of the application code
+########## BUILD LAYER ##########
+FROM deps AS build
+
+# Copy source code AFTER deps
 COPY . .
 
-# Build the TypeScript code
+# Build TypeScript
 RUN npm run t
 
-# Set environment variables
-ENV NODE_ENV=production
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+########## RUNTIME IMAGE ##########
+FROM base AS runtime
 
-# Start the bot using dumb-init to handle signals correctly
+WORKDIR /app
+
+# Copy built app + node_modules ONLY
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/lib ./lib
+COPY --from=build /app/package.json ./package.json
+
+# Start app
 CMD ["dumb-init", "node", "lib/bot.js"]
