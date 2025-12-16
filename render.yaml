@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: neko-bot
+    env: node
+    buildCommand: yarn install && npm run t
+    startCommand: node lib/bot.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: true
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/chromium
+      - key: FIREBASE_JSON
+        sync: false
