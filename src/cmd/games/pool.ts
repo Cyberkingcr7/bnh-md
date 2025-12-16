@@ -132,14 +132,14 @@ const drawCircle = (img: Jimp, cx: number, cy: number, r: number, color: string)
 
 const renderTable = async (game: GameState, caption?: string): Promise<Buffer> => {
   const pad = 60;
-  const img = new Jimp(TABLE_W + pad * 2, TABLE_H + pad * 2, "#0b3d2b");
+  const img = new Jimp(TABLE_W + pad * 2, TABLE_H + pad * 2, "#0b3d2b" as any);
   const font = await Jimp.loadFont(Jimp.FONT_SANS_16_WHITE);
   const tableX = pad, tableY = pad;
 
-  const felt = new Jimp(TABLE_W, TABLE_H, "#156d47");
+  const felt = new Jimp(TABLE_W, TABLE_H, "#156d47" as any);
   img.composite(felt, tableX, tableY);
 
-  const cushion = new Jimp(TABLE_W + 8, TABLE_H + 8, "#0a2d20");
+  const cushion = new Jimp(TABLE_W + 8, TABLE_H + 8, "#0a2d20" as any);
   img.composite(cushion, tableX - 4, tableY - 4);
 
   // Safe fillRect to avoid out-of-range errors
