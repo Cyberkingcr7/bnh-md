@@ -51,7 +51,7 @@ const renderBoard = async (game: GameState): Promise<Buffer> => {
   const w = game.width * cellSize + pad * 2;
   const h = game.height * cellSize + pad * 2;
 
-  const img = new Jimp(w, h, "#111820");
+  const img = new Jimp(w, h, "#111820" as any);
   const font = await Jimp.loadFont(Jimp.FONT_SANS_16_WHITE);
 
   for (let y = 0; y < game.height; y++) {
@@ -73,7 +73,7 @@ const renderBoard = async (game: GameState): Promise<Buffer> => {
         const clr = player?.color || "#ffffff";
         const circleRadius = 14;
         for (let i = 0; i < cell.count; i++) {
-          const offsetX = x0 + cellSize / 2 + (i - 1) * (circleRadius * 1.5);
+          const offsetX = x0 + cellSize / 2 + (i - (cell.count - 1) / 2) * (circleRadius * 1.5);
           const offsetY = y0 + cellSize / 2;
           img.scan(
             offsetX - circleRadius,
